@@ -1,0 +1,8 @@
+<RCC>
+  <qresource prefix="newPrefix">
+    <file>images/check-mark.png</file>
+    <file>images/doc.png</file>
+    <file>images/file.png</file>
+    <file>images/drag.png</file>
+  </qresource>
+</RCC>
