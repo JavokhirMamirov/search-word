@@ -1,12 +1,10 @@
 import sys
-
-from PyQt5 import QtWidgets
-import PyPDF2
+from PyQt5 import QtWidgets, QtCore
 from PyQt5.QtWidgets import QMainWindow, QApplication, QFrame, QFileDialog, QGraphicsDropShadowEffect
-
 from ux import main_ux, file_frame, chostata_item_ux, file_item_ux, yondosh_word_ux
-
-
+from pdfminer.high_level import extract_text
+from docx import Document
+from libs.Loading import LoadingScreen
 class FileFrame(QFrame, file_frame.Ui_Frame):
     def __init__(self, name):
         super(FileFrame, self).__init__()
@@ -73,71 +71,118 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
     def __init__(self):
         super(Main, self).__init__()
         self.setupUi(self)
-        self.files = []
-        self.effect = QGraphicsDropShadowEffect()
+        try:
+            # self.loading = LoadingScreen(self)
+            # self.loading_timer = QtCore.QTimer()
+            # self.loading_timer.setInterval(500)
+            # self.loading_timer.timeout.connect(self.loadingAmimationActive)
+            self.files = []
+            self.effect = QGraphicsDropShadowEffect()
+            self.stackedWidget.setCurrentWidget(self.page_file_upload)
+            self.tabWidget.setCurrentWidget(self.tab)
+            self.effect.setOffset(0, 0)
+            self.effect.setBlurRadius(8)
+            self.frame.setGraphicsEffect(self.effect)
+            self.verticalLayout_side = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_2)
+            self.verticalLayout_right = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents)
+            self.verticalLayout_chostata = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_3)
+            self.verticalLayout_file = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_4)
+            self.verticalLayout_yondosh = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_5)
+            self.upload_btn.clicked.connect(self.open_file)
+            self.next_btn.clicked.connect(self.next_window_open)
+            self.return_file_upload.clicked.connect(self.return_file_upload_window)
+            self.search_btn.clicked.connect(self.search_word)
+        except Exception as err:
+            QtWidgets.QMessageBox.about(self, "Info", f'{err}')
 
-        self.effect.setOffset(0, 0)
-
-        self.effect.setBlurRadius(8)
-        self.frame.setGraphicsEffect(self.effect)
-        self.verticalLayout_side = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_2)
-        self.verticalLayout_right = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents)
-        self.verticalLayout_chostata = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_3)
-        self.verticalLayout_file = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_4)
-        self.verticalLayout_yondosh = QtWidgets.QVBoxLayout(self.scrollAreaWidgetContents_5)
-        self.upload_btn.clicked.connect(self.open_file)
-        self.next_btn.clicked.connect(self.next_window_open)
-        self.return_file_upload.clicked.connect(self.return_file_upload_window)
-        self.search_btn.clicked.connect(self.search_word)
+    # def loadingAmimationActive(self):
+    #     self.loading.startAnimation()
+    #     self.loading_timer.stop()
 
     def search_word(self):
         word = self.lineEdit.text()
+        word = word.lower()
         additional_words = ['']
+        total_text = ""
         if word != "":
-            total_count = 0
-            file_items = []
-            total_text = ""
+            file_data = []
+            # self.loading_timer.start()
+            # self.loading.startAnimation()
             for file in self.files:
-                f = open(file, "rb")
-                if file.endswith('.pdf'):
-                    reader = PyPDF2.PdfReader(f)
-                    count = 0
-                    for page in reader.pages:
-                        text = page.extract_text()
-                        total_text += text.lower()
-                        count += text.count(word.lower())
-                    total_count += count
+                if file.endswith(".pdf"):
+                    text = extract_text(file)
+                    text = text.lower()
                     dt = {
-                        "file": file,
-                        "count": count
+                        "file": file.split("/")[-1],
+                        "count": text.count(word),
+                        "word": word
                     }
-                    file_items.append(dt)
-            chostata = self.checking_text(total_text, word)
-            print(chostata)
+                    file_data.append(dt)
+                    total_text += "\n" + text
+                elif file.endswith(".docx"):
+                    text_doc = ""
+                    document = Document(file)
+                    for parag in document.paragraphs:
+                        text_doc += "\n"+parag.text
+                    text_doc = text_doc.lower()
+                    dt = {
+                        "file": file.split("/")[-1],
+                        "count": text_doc.count(word),
+                        "word": word
+                    }
+                    file_data.append(dt)
+                    total_text += "\n" + text_doc
 
-            # self.remove_items(self.verticalLayout_chostata)
-            # self.remove_items(self.verticalLayout_file)
-            # self.remove_items(self.verticalLayout_yondosh)
-            # self.set_chostata_items(data)
-            # self.set_file_items(data)
-            # self.set_yondosh_word(data2)
+            chostata, data_yondosh = self.checking_text(total_text, word)
+
+            self.remove_items(self.verticalLayout_chostata)
+            self.remove_items(self.verticalLayout_file)
+            self.remove_items(self.verticalLayout_yondosh)
+            self.set_chostata_items(chostata)
+            self.set_file_items(file_data)
+            self.set_yondosh_word(data_yondosh)
+            # self.loading.stopAnimation()
+            # self.loading_timer.stop()
 
     def checking_text(self, text, word):
         text = text.lower()
         word = word.lower()
-        count = text.count(word)
         list_text = text.split()
+        data_yondosh = []
+        # list_sings = ['.', ',', ':', ';', "?", '[', ']', "{", "}", ')', '(','!', '@', '#', '$', '%', '&', '*']
         list_word = []
+        i = 0
         for txt in list_text:
             if txt.startswith(word):
-                list_word.append(txt)
-        print(list_word)
+                if txt not in list_word:
+                    list_word.append(txt)
+                if i == 0 and i < len(list_text):
+                    dt = {
+                        "word_before": "",
+                        "word": txt,
+                        "word_after": list_text[i + 1]
+
+                    }
+                    data_yondosh.append(dt)
+
+                elif i > 0 and i < len(list_text):
+                    dt = {
+                        "word_before": list_text[i - 1],
+                        "word": txt,
+                        "word_after": list_text[i + 1]
+                    }
+                    data_yondosh.append(dt)
+
+                elif len(list_text) - 1 == i:
+                    dt = {
+                        "word_before": list_text[i - 1],
+                        "word": txt,
+                        "word_after": ""
+                    }
+                    data_yondosh.append(dt)
+            i += 1
+
         chastota = []
-        dt = {
-            "word": word,
-            "count": count
-        }
-        chastota.append(dt)
         for w in list_word:
             cn = text.count(w)
             dt = {
@@ -146,7 +191,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
             }
             chastota.append(dt)
 
-        return chastota
+        return chastota, data_yondosh
 
     def open_file(self):
         path = QFileDialog.getOpenFileNames(self, 'Open a file', '',
@@ -219,6 +264,8 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
+
     window = Main()
     window.show()
+
     sys.exit(app.exec_())
