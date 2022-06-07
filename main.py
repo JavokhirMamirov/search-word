@@ -123,8 +123,10 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
                     text_doc = ""
                     document = Document(file)
                     for parag in document.paragraphs:
+                        print(parag)
                         text_doc += "\n"+parag.text
                     text_doc = text_doc.lower()
+                    print(text_doc)
                     dt = {
                         "file": file.split("/")[-1],
                         "count": text_doc.count(word),
@@ -165,7 +167,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
                     }
                     data_yondosh.append(dt)
 
-                elif i > 0 and i < len(list_text):
+                elif i > 0 and i+1 < len(list_text):
                     dt = {
                         "word_before": list_text[i - 1],
                         "word": txt,
@@ -195,7 +197,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
 
     def open_file(self):
         path = QFileDialog.getOpenFileNames(self, 'Open a file', '',
-                                            'Files (*.pdf;*.doc;*.docx)')
+                                            'Files (*.pdf;*.docx)')
         if path != ('', ''):
             self.remove_widgets()
             self.layout_set_widget(path[0])

@@ -16,7 +16,17 @@
    </font>
   </property>
   <property name="windowTitle">
-   <string>MainWindow</string>
+   <string>So'zshunoslik</string>
+  </property>
+  <property name="windowIcon">
+   <iconset resource="../resource.qrc">
+    <normaloff>:/newPrefix/images/logo.ico</normaloff>:/newPrefix/images/logo.ico</iconset>
+  </property>
+  <property name="iconSize">
+   <size>
+    <width>128</width>
+    <height>100</height>
+   </size>
   </property>
   <property name="animated">
    <bool>true</bool>
@@ -533,8 +543,8 @@ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal
                   <rect>
                    <x>0</x>
                    <y>0</y>
-                   <width>379</width>
-                   <height>400</height>
+                   <width>100</width>
+                   <height>30</height>
                   </rect>
                  </property>
                 </widget>
