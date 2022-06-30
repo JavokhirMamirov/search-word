@@ -25,7 +25,7 @@ class Worker(QThread):
         for data in data_files:
             self.set_file_signal.emit(data['file'])
             time.sleep(0.1)
-            for key in data['words'].keys():
+            for key in sorted(data['words'].keys()):
                 self.set_item_signal.emit(key, str(data['words'][key]))
                 time.sleep(0.1)
         self.set_end_signal.emit("end")
@@ -69,6 +69,57 @@ class Worker(QThread):
                 file_data.append(dt)
 
         return file_data
+
+class WorkerStart(QThread):
+    set_item_signal = pyqtSignal(str, str)
+    set_end_signal = pyqtSignal(str)
+
+    def __init__(self, parent):
+        QThread.__init__(self, parent=parent)
+        self.parent = parent
+
+    def run(self):
+        data_files = self.start_read_file()
+        sort_keys = sorted(data_files.keys())
+        for key in sort_keys:
+            self.set_item_signal.emit(key, str(data_files[key]))
+            time.sleep(0.1)
+        self.set_end_signal.emit("end")
+
+    def stop(self):
+        self.terminate()
+
+    def word_count(self, str):
+        counts = dict()
+        words = str.split()
+
+        for word in words:
+            if word in counts:
+                counts[word] += 1
+            else:
+                counts[word] = 1
+
+        return counts
+
+    def start_read_file(self):
+        text_all = ""
+        for file in self.parent.files:
+            if file.endswith(".pdf"):
+                text = extract_text(file)
+                text = text.lower()
+                text_all += " "+text
+            elif file.endswith(".docx"):
+                text_doc = ""
+                document = Document(file)
+                for parag in document.paragraphs:
+                    text_doc += "\n" + parag.text
+                text_doc = text_doc.lower()
+                text_all += " " + text_doc
+
+        words = self.word_count(text_all)
+        return words
+
+
 
 
 class WorkerSearch(QThread):
@@ -243,6 +294,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
             self.files = []
             self.word = ""
             self.first_file = [None]
+            self.all_file = True
             self.effect = QGraphicsDropShadowEffect()
             self.stackedWidget.setCurrentWidget(self.page_file_upload)
             self.tabWidget.setCurrentWidget(self.tab)
@@ -262,6 +314,9 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
             self.file_render_worker.set_file_signal.connect(self.set_card_file)
             self.file_render_worker.set_item_signal.connect(self.set_card_items)
             self.file_render_worker.set_end_signal.connect(self.set_card_end)
+            self.start_item_render_worker = WorkerStart(self)
+            self.start_item_render_worker.set_item_signal.connect(self.set_card_items)
+            self.start_item_render_worker.set_end_signal.connect(self.set_card_end)
             self.search_render_worker = WorkerSearch(self)
             self.search_render_worker.set_file_chostata_signal.connect(self.set_file_items)
             self.search_render_worker.set_item_chostata_signal.connect(self.set_chostata_items)
@@ -300,7 +355,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
         if word != "":
             self.file_render_worker.stop()
             self.search_render_worker.stop()
-
+            self.start_item_render_worker.stop()
             self.remove_items(self.verticalLayout_chostata)
             self.remove_items(self.verticalLayout_yondosh)
             self.remove_items(self.verticalLayout_file)
@@ -321,8 +376,7 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
             self.stackedWidget.setCurrentWidget(self.page_main)
             # self.loading_timer.start()
             self.remove_items(self.verticalLayout_chostata)
-
-            self.file_render_worker.start()
+            self.start_item_render_worker.start()
 
     def return_file_upload_window(self):
         self.stackedWidget.setCurrentWidget(self.page_file_upload)
@@ -331,8 +385,11 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
         self.first_file[0] = file
         self.file_render_worker.stop()
         self.search_render_worker.stop()
+        self.start_item_render_worker.stop()
 
         self.remove_items(self.verticalLayout_chostata)
+        self.remove_items(self.verticalLayout_yondosh)
+        self.remove_items(self.verticalLayout_file)
         self.file_render_worker.start()
 
     def set_files_side(self):
@@ -371,9 +428,11 @@ class Main(QMainWindow, main_ux.Ui_MainWindow):
         self.verticalLayout_chostata.addWidget(v)
 
     def remove_items(self, layout):
-        for i in reversed(range(layout.count())):
-            w = layout.itemAt(i).widget()
-            layout.removeWidget(w)
+        if layout.count() > 0:
+            for i in reversed(range(layout.count())):
+                w = layout.itemAt(i).widget()
+                if w is not None:
+                    layout.removeWidget(w)
 
     @pyqtSlot(str, str, str)
     def set_file_items(self, file, count, word):
