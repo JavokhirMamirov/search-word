@@ -661,7 +661,7 @@ class Ui_MainWindow(object):
         self.search_btn.setText(_translate("MainWindow", "Qidirish"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab), _translate("MainWindow", "Chastota"))
         self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_2), _translate("MainWindow", "Fayl bo\'yicha"))
-        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), _translate("MainWindow", "Yondosh so\'z"))
+        self.tabWidget.setTabText(self.tabWidget.indexOf(self.tab_3), _translate("MainWindow", "Kontekst"))
 import resource_rc
 
 

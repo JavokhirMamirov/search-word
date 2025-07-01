@@ -1,3 +1,4 @@
+import re
 import sys
 import time
 
@@ -45,11 +46,28 @@ class Worker(QThread):
 
         return counts
 
+    def clean_text_only_words(self, text):
+        # g‘ va o‘ harflarini vaqtincha almashtiramiz
+        text = text.replace("g‘", "G_").replace("o‘", "O_")
+
+        # Belgilarni tozalash — faqat o‘zbek va rus harflarini qoldiramiz
+        # `'` va `’` bilan bir qatorda boshqa maxsus belgilar ham olib tashlanadi
+        text = re.sub(r"[^a-zA-Zа-яА-ЯёЁўғқҳЎҒҚҲG_O_\s]", " ", text)
+
+        # Ortiqcha bo'shliqlarni tozalaymiz
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        # Yashirin belgilarni qayta almashtiramiz
+        text = text.replace("G_", "g‘").replace("O_", "o‘")
+
+        return text
+
     def start_read_file(self):
         file_data = []
         for file in self.parent.first_file:
             if file.endswith(".pdf"):
                 text = extract_text(file)
+                text = self.clean_text_only_words(text)
                 text = text.lower()
                 dt = {
                     "file": file.split("/")[-1],
@@ -62,6 +80,7 @@ class Worker(QThread):
                 for parag in document.paragraphs:
                     text_doc += "\n" + parag.text
                 text_doc = text_doc.lower()
+                text_doc = self.clean_text_only_words(text_doc)
                 dt = {
                     "file": file.split("/")[-1],
                     "words": self.word_count(text_doc)
@@ -101,19 +120,35 @@ class WorkerStart(QThread):
 
         return counts
 
+    def clean_text_only_words(self, text):
+        # g‘ va o‘ harflarini vaqtincha almashtiramiz
+        text = text.replace("g‘", "G_").replace("o‘", "O_")
+
+        # Belgilarni tozalash — faqat o‘zbek va rus harflarini qoldiramiz
+        # `'` va `’` bilan bir qatorda boshqa maxsus belgilar ham olib tashlanadi
+        text = re.sub(r"[^a-zA-Zа-яА-ЯёЁўғқҳЎҒҚҲG_O_\s]", " ", text)
+
+        # Ortiqcha bo'shliqlarni tozalaymiz
+        text = re.sub(r'\s+', ' ', text).strip()
+
+        # Yashirin belgilarni qayta almashtiramiz
+        text = text.replace("G_", "g‘").replace("O_", "o‘")
+
+        return text
+
     def start_read_file(self):
         text_all = ""
         for file in self.parent.files:
             if file.endswith(".pdf"):
-                text = extract_text(file)
-                text = text.lower()
-                text_all += " "+text
+                text = extract_text(file).lower()
+                text = self.clean_text_only_words(text)
+                text_all += " " + text
             elif file.endswith(".docx"):
                 text_doc = ""
                 document = Document(file)
                 for parag in document.paragraphs:
                     text_doc += "\n" + parag.text
-                text_doc = text_doc.lower()
+                text_doc = self.clean_text_only_words(text_doc.lower())
                 text_all += " " + text_doc
 
         words = self.word_count(text_all)
@@ -150,7 +185,8 @@ class WorkerSearch(QThread):
                 file = file.split("/")[-1]
                 count = text.count(word)
                 total_text += "\n" + text
-                self.set_file_chostata_signal.emit(file, str(count), word)
+                if count > 0:
+                    self.set_file_chostata_signal.emit(file, str(count), word)
                 time.sleep(0.1)
             elif file.endswith(".docx"):
                 text_doc = ""
@@ -161,34 +197,51 @@ class WorkerSearch(QThread):
                 file = file.split("/")[-1]
                 count = text_doc.count(word)
                 total_text += "\n" + text_doc
-                self.set_file_chostata_signal.emit(file, str(count), word)
+                if count > 0:
+                    self.set_file_chostata_signal.emit(file, str(count), word)
                 time.sleep(0.1)
         self.checking_text(total_text, word)
 
-    def checking_text(self, text, word):
-        text = text.lower()
+    def checking_text(self, text: str, word: str):
         word = word.lower()
-        list_text = text.split()
-        list_word = []
-        i = 0
-        for txt in list_text:
-            if txt.startswith(word):
-                if txt not in list_word:
-                    cn = text.count(txt)
-                    self.set_item_chostata_signal.emit(txt, str(cn))
-                    time.sleep(0.1)
-                if i == 0 and i < len(list_text):
-                    self.set_yondosh_item_signal.emit("", txt, list_text[i + 1])
-                    time.sleep(0.1)
+        text = text.lower()
 
-                elif i > 0 and i + 1 < len(list_text):
-                    self.set_yondosh_item_signal.emit(list_text[i - 1], txt, list_text[i + 1])
-                    time.sleep(0.1)
+        # Faqat so'zlar va tinish belgilarini ajratish
+        sentences = re.split(r'(?<=[.!?])\s+', text)  # Jumlalarga bo'lish
+        found_contexts = set()
+        word_count = 0
 
-                elif len(list_text) - 1 == i:
-                    self.set_yondosh_item_signal.emit(list_text[i - 1], txt, "")
-                    time.sleep(0.1)
-            i += 1
+        for sentence in sentences:
+            words = sentence.split()
+            for i, w in enumerate(words):
+                if w == word:
+                    word_count += 1
+
+                    # Gap boshida va oxirida bo'lishiga qarab kontekstni aniqlash
+                    if i == 0:
+                        next_words = words[i + 1:i + 3]
+                        context = f"{w} {' '.join(next_words)}"
+                        prev_word = ""
+                        next_word = " ".join(next_words)
+                    elif i == len(words) - 1:
+                        prev_words = words[max(0, i - 2):i]
+                        context = f"{' '.join(prev_words)} {w}"
+                        next_word = ""
+                        prev_word = " ".join(prev_words)
+                    else:
+                        prev_word = words[i - 1]
+                        next_word = words[i + 1] if i + 1 < len(words) else ""
+                        context = f"{prev_word} {w} {next_word}"
+
+                    # Takroriy kontekstlarni chiqarishni oldini olamiz
+                    if context not in found_contexts:
+                        found_contexts.add(context)
+                        self.set_yondosh_item_signal.emit(prev_word, w, next_word)
+                        time.sleep(0.1)
+
+        # Umumiy so‘zlar sonini signalga uzatamiz
+        if word_count > 0:
+            self.set_item_chostata_signal.emit(word, str(word_count))
 
 
 
